@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Classroom Seating Randomizer</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <div class="brand">
+          <div class="brand-icon" aria-hidden="true">▣</div>
+          <div>
+            <h1>Classroom Seating Randomizer</h1>
+            <p>Arrange desks, add names or numbers, then shuffle seats.</p>
+          </div>
+        </div>
+        <div class="top-actions">
+          <button id="randomizeBtn" class="primary-btn" type="button">Randomize Seats</button>
+          <button id="saveBtn" type="button">Save</button>
+          <button id="exportBtn" type="button">Export</button>
+          <label class="file-button">
+            Import
+            <input id="importInput" type="file" accept="application/json" />
+          </label>
+          <button id="clearBtn" type="button">Clear Seats</button>
+        </div>
+      </header>
+
+      <main class="workspace">
+        <aside class="panel student-panel" aria-label="Roster">
+          <div class="panel-heading">
+            <h2>Students</h2>
+            <span id="studentCount" class="count-pill">0</span>
+          </div>
+          <form id="addForm" class="add-form">
+            <input
+              id="studentInput"
+              type="text"
+              autocomplete="off"
+              placeholder="Type a name or number"
+              aria-label="Student name or number"
+            />
+            <button type="submit">Add</button>
+          </form>
+          <textarea
+            id="bulkInput"
+            class="bulk-input"
+            rows="6"
+            placeholder="Or paste a list, one per line"
+            aria-label="Paste a roster"
+          ></textarea>
+          <button id="addBulkBtn" class="wide-btn" type="button">Add Pasted List</button>
+          <ol id="studentList" class="student-list"></ol>
+        </aside>
+
+        <section class="room-section" aria-label="Classroom">
+          <div class="room-toolbar">
+            <div>
+              <label for="roomName">Room</label>
+              <input id="roomName" type="text" value="Mrs. Nevins' Classroom" />
+            </div>
+            <div class="zoom-tools">
+              <button id="zoomOutBtn" type="button" aria-label="Zoom out">−</button>
+              <span id="zoomLabel">100%</span>
+              <button id="zoomInBtn" type="button" aria-label="Zoom in">+</button>
+            </div>
+          </div>
+          <div class="room-scroll">
+            <div id="roomFrame" class="room-frame">
+              <div id="room" class="room" aria-label="Desk layout canvas">
+                <div class="whiteboard">Smart TV / Whiteboard</div>
+                <div class="plant plant-left" aria-hidden="true">
+                  <span></span>
+                </div>
+                <div id="teacherDesk" class="teacher-desk" role="button" tabindex="0" title="Drag to move the teacher desk">
+                  <button id="rotateTeacherBtn" class="rotate-desk-btn" type="button" aria-label="Rotate teacher desk" title="Rotate teacher desk">
+                    ↻
+                  </button>
+                  Teacher
+                </div>
+                <div id="elementLayer" class="element-layer"></div>
+                <div id="deskLayer" class="desk-layer"></div>
+              </div>
+            </div>
+          </div>
+          <p class="hint">Tip: drag desks to fine-tune the room. Use Freeform when you want full control.</p>
+        </section>
+
+        <aside id="toolsPanel" class="panel tools-panel" aria-label="Layout tools">
+          <div class="panel-heading">
+            <h2>Layout Tools</h2>
+            <button
+              id="toggleToolsBtn"
+              class="collapse-btn"
+              type="button"
+              aria-expanded="true"
+              aria-controls="toolsContent"
+              title="Collapse layout tools"
+            >
+              ›
+            </button>
+          </div>
+
+          <div id="toolsContent" class="tools-content">
+            <section class="tool-group">
+              <h3>Desk Arrangement</h3>
+              <div class="layout-grid">
+                <button class="layout-option active" type="button" data-layout="rows">Rows</button>
+                <button class="layout-option" type="button" data-layout="pairs">Pairs</button>
+                <button class="layout-option" type="button" data-layout="trios">Trios</button>
+                <button class="layout-option" type="button" data-layout="groups">Groups</button>
+                <button class="layout-option" type="button" data-layout="ushape">U-Shape</button>
+                <button class="layout-option" type="button" data-layout="centerAisle">Center Aisle</button>
+                <button class="layout-option" type="button" data-layout="freeform">Freeform</button>
+              </div>
+            </section>
+
+            <section class="tool-group">
+              <h3>Desk Settings</h3>
+              <label class="setting-row">
+                <span>Number of desks</span>
+                <input id="deskCountInput" type="number" min="1" max="60" value="20" />
+              </label>
+              <label class="setting-row">
+                <span>Spacing</span>
+                <input id="spacingInput" type="range" min="0" max="140" value="24" />
+              </label>
+              <label class="setting-row">
+                <span>Desk size <output id="deskSizeValue">122%</output></span>
+                <input id="deskSizeInput" type="range" min="100" max="220" value="122" />
+              </label>
+            </section>
+
+            <section class="tool-group">
+              <h3>Desk Tools</h3>
+              <label class="tool-toggle">
+                <input id="groupLockInput" type="checkbox" />
+                <span>Lock Groups</span>
+              </label>
+            </section>
+
+            <section class="tool-group">
+              <h3>Elements</h3>
+              <button id="addNileRiverBtn" class="wide-btn" type="button">Add Nile River</button>
+              <button id="addDigSightBtn" class="wide-btn" type="button">Add Dig Sight</button>
+            </section>
+
+            <section class="tool-group">
+              <h3>Helpful Actions</h3>
+              <button id="matchBtn" class="wide-btn" type="button">Match Desk Count to Students</button>
+              <button id="sampleBtn" class="wide-btn" type="button">Load Numbers 1-20</button>
+              <button id="printBtn" class="wide-btn" type="button">Print Seating Chart</button>
+            </section>
+          </div>
+        </aside>
+      </main>
+    </div>
+
+    <template id="studentTemplate">
+      <li class="student-item" draggable="true">
+        <span class="drag-handle" aria-hidden="true">⋮⋮</span>
+        <span class="student-name"></span>
+        <button type="button" aria-label="Remove student">×</button>
+      </li>
+    </template>
+
+    <script src="app.js"></script>
+  </body>
+</html>
