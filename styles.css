@@ -88,6 +88,32 @@ button:hover,
   border-bottom: 1px solid var(--line);
 }
 
+.class-tabs {
+  min-height: 54px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--line);
+  background: #fbfbfa;
+  overflow-x: auto;
+}
+
+.class-tab {
+  min-height: 34px;
+  white-space: nowrap;
+  color: var(--muted);
+  background: #fff;
+  padding: 0 14px;
+}
+
+.class-tab.active {
+  color: #fff;
+  border-color: var(--accent);
+  background: var(--accent);
+  font-weight: 800;
+}
+
 .brand {
   display: flex;
   align-items: center;
@@ -164,7 +190,7 @@ h1 {
 .student-panel,
 .tools-panel {
   width: 310px;
-  max-height: calc(100vh - 110px);
+  max-height: calc(100vh - 164px);
   overflow-y: auto;
   transition:
     width 180ms ease,
@@ -301,7 +327,7 @@ textarea {
 }
 
 .room-section {
-  min-height: calc(100vh - 110px);
+  min-height: calc(100vh - 164px);
   display: flex;
   flex-direction: column;
   border-radius: 10px;

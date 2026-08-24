@@ -8,10 +8,30 @@ const TEACHER_DESK_BASE_HEIGHT = 91;
 const ROOM_EDGE_PADDING = 10;
 const TEACHER_EDGE_PADDING = 80;
 const DESK_COLLISION_GAP = 8;
+const CLASS_COUNT = 6;
 
 const sampleStudents = Array.from({ length: 20 }, (_, index) => String(index + 1));
+const chartFields = [
+  "className",
+  "roomName",
+  "students",
+  "desks",
+  "elements",
+  "layout",
+  "deskCount",
+  "spacing",
+  "deskScale",
+  "groupMoveLocked",
+  "zoom",
+  "toolsCollapsed",
+  "roomLayoutVersion",
+  "teacherDesk",
+];
 
 const state = {
+  classes: [],
+  activeClassIndex: 0,
+  className: "Class 1",
   roomName: "Mrs. Nevins' Classroom",
   students: [],
   desks: [],
@@ -39,6 +59,7 @@ const els = {
   addBulkBtn: document.querySelector("#addBulkBtn"),
   studentList: document.querySelector("#studentList"),
   studentCount: document.querySelector("#studentCount"),
+  classTabs: document.querySelector("#classTabs"),
   elementLayer: document.querySelector("#elementLayer"),
   deskLayer: document.querySelector("#deskLayer"),
   deskCountInput: document.querySelector("#deskCountInput"),
@@ -61,11 +82,72 @@ function createId(prefix) {
   return `${prefix}-${Math.random().toString(36).slice(2)}-${Date.now()}`;
 }
 
+function cloneData(value) {
+  return JSON.parse(JSON.stringify(value));
+}
+
+function createDefaultChart(index) {
+  const chart = {
+    className: `Class ${index + 1}`,
+    roomName: "Mrs. Nevins' Classroom",
+    students: sampleStudents.map((name) => ({ id: createId("student"), name })),
+    desks: buildDesks(20),
+    elements: [],
+    layout: "rows",
+    deskCount: 20,
+    spacing: 24,
+    deskScale: DEFAULT_DESK_SCALE,
+    groupMoveLocked: false,
+    zoom: 1,
+    toolsCollapsed: false,
+    roomLayoutVersion: ROOM_LAYOUT_VERSION,
+    teacherDesk: { x: 1334, y: 770, rotation: 90 },
+  };
+  return chart;
+}
+
+function chartSnapshot() {
+  return chartFields.reduce((snapshot, field) => {
+    snapshot[field] = cloneData(state[field]);
+    return snapshot;
+  }, {});
+}
+
+function normalizeChart(chart, index) {
+  return {
+    ...createDefaultChart(index),
+    ...chart,
+    className: chart?.className || `Class ${index + 1}`,
+  };
+}
+
+function loadChart(index) {
+  const chart = normalizeChart(state.classes[index], index);
+  chartFields.forEach((field) => {
+    state[field] = cloneData(chart[field]);
+  });
+  state.classes[index] = chartSnapshot();
+}
+
+function syncActiveChart() {
+  if (!Array.isArray(state.classes) || !state.classes[state.activeClassIndex]) return;
+  state.classes[state.activeClassIndex] = chartSnapshot();
+}
+
+function switchClass(index) {
+  syncActiveChart();
+  state.activeClassIndex = index;
+  loadChart(index);
+  saveState();
+  render();
+}
+
 function loadState() {
   const saved = localStorage.getItem(STORAGE_KEY);
   if (!saved) {
-    state.students = sampleStudents.map((name) => ({ id: createId("student"), name }));
-    state.desks = buildDesks(state.deskCount);
+    state.classes = Array.from({ length: CLASS_COUNT }, (_, index) => createDefaultChart(index));
+    state.activeClassIndex = 0;
+    loadChart(0);
     applyLayout();
     return;
   }
@@ -73,6 +155,16 @@ function loadState() {
   try {
     const parsed = JSON.parse(saved);
     Object.assign(state, parsed);
+    if (!Array.isArray(state.classes)) {
+      const legacyChart = chartSnapshot();
+      state.classes = Array.from({ length: CLASS_COUNT }, (_, index) => createDefaultChart(index));
+      state.classes[0] = normalizeChart({ ...legacyChart, className: "Class 1" }, 0);
+      state.activeClassIndex = 0;
+    } else {
+      state.activeClassIndex = Math.max(0, Math.min(CLASS_COUNT - 1, Number(state.activeClassIndex) || 0));
+      state.classes = Array.from({ length: CLASS_COUNT }, (_, index) => normalizeChart(state.classes[index], index));
+      loadChart(state.activeClassIndex);
+    }
     if (!state.roomName || state.roomName === "Room 101") {
       state.roomName = "Mrs. Nevins' Classroom";
     }
@@ -102,16 +194,15 @@ function loadState() {
       saveState();
     }
   } catch {
-    state.students = [];
-    state.desks = buildDesks(state.deskCount);
-    state.elements = [];
-    state.roomLayoutVersion = ROOM_LAYOUT_VERSION;
-    state.teacherDesk = { x: 1334, y: 770, rotation: 90 };
+    state.classes = Array.from({ length: CLASS_COUNT }, (_, index) => createDefaultChart(index));
+    state.activeClassIndex = 0;
+    loadChart(0);
     applyLayout();
   }
 }
 
 function saveState() {
+  syncActiveChart();
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
 }
 
@@ -545,6 +636,22 @@ function escapeAttribute(value) {
     .replaceAll(">", "&gt;");
 }
 
+function renderClassTabs() {
+  els.classTabs.innerHTML = "";
+  state.classes.forEach((chart, index) => {
+    const tab = document.createElement("button");
+    tab.type = "button";
+    tab.className = "class-tab";
+    tab.classList.toggle("active", index === state.activeClassIndex);
+    tab.textContent = chart.className || `Class ${index + 1}`;
+    tab.setAttribute("aria-current", index === state.activeClassIndex ? "page" : "false");
+    tab.addEventListener("click", () => {
+      if (index !== state.activeClassIndex) switchClass(index);
+    });
+    els.classTabs.appendChild(tab);
+  });
+}
+
 function render() {
   els.roomName.value = state.roomName;
   els.deskCountInput.value = state.desks.length;
@@ -558,6 +665,7 @@ function render() {
   els.toolsPanel.classList.toggle("collapsed", state.toolsCollapsed);
   els.toggleToolsBtn.setAttribute("aria-expanded", String(!state.toolsCollapsed));
   els.toggleToolsBtn.title = state.toolsCollapsed ? "Expand layout tools" : "Collapse layout tools";
+  renderClassTabs();
   renderTeacherDesk();
   fitRoomToScreen();
   renderStudents();
@@ -934,7 +1042,8 @@ function importLayout(file) {
   reader.onload = () => {
     try {
       const imported = JSON.parse(reader.result);
-      Object.assign(state, imported);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(imported));
+      loadState();
       saveState();
       render();
     } catch {

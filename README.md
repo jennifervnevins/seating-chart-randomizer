@@ -9,8 +9,9 @@ Open `index.html` in Chrome, Edge, Safari, or Firefox.
 ## What It Can Do
 
 - Start with student cards numbered 1-20, then add or edit numbers as needed.
+- Use six class tabs to keep separate seating charts for different classes.
 - Paste a whole class list, one item per line.
-- Randomize students into desks with one button.
+- Randomize only the currently selected class seating chart with one button.
 - Choose rows, pairs, groups, U-shape, or freeform arrangements.
 - Drag desks around by hand with the mouse pointer.
 - Edit the number directly on a desk.
