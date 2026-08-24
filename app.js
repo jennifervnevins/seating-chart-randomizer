@@ -19,6 +19,7 @@ const chartFields = [
   "students",
   "desks",
   "elements",
+  "rules",
   "layout",
   "deskCount",
   "spacing",
@@ -38,6 +39,7 @@ const state = {
   students: [],
   desks: [],
   elements: [],
+  rules: [],
   layout: DEFAULT_LAYOUT,
   deskCount: DEFAULT_DESK_COUNT,
   spacing: 24,
@@ -69,6 +71,8 @@ const els = {
   deskSizeInput: document.querySelector("#deskSizeInput"),
   deskSizeValue: document.querySelector("#deskSizeValue"),
   groupLockInput: document.querySelector("#groupLockInput"),
+  addRuleBtn: document.querySelector("#addRuleBtn"),
+  ruleList: document.querySelector("#ruleList"),
   teacherDesk: document.querySelector("#teacherDesk"),
   rotateTeacherBtn: document.querySelector("#rotateTeacherBtn"),
   room: document.querySelector("#room"),
@@ -131,6 +135,7 @@ function createDefaultChart(index) {
     students: sampleStudents.map((name) => ({ id: createId("student"), name })),
     desks: buildDesks(DEFAULT_DESK_COUNT),
     elements: [],
+    rules: [],
     layout: DEFAULT_LAYOUT,
     deskCount: DEFAULT_DESK_COUNT,
     spacing: 24,
@@ -174,6 +179,7 @@ function normalizeChart(chart, index) {
   }
 
   normalized.roomLayoutVersion = ROOM_LAYOUT_VERSION;
+  normalized.rules = Array.isArray(normalized.rules) ? normalized.rules : [];
   return normalized;
 }
 
@@ -641,6 +647,7 @@ function renderDesks() {
       }
       saveState();
       renderStudents();
+      renderRules();
     });
     deskEl.addEventListener("dragover", (event) => {
       event.preventDefault();
@@ -708,6 +715,76 @@ function renderClassTabs() {
   });
 }
 
+function studentSelectOptions(selectedId) {
+  const options = ['<option value="">Choose...</option>'];
+  state.students.forEach((student) => {
+    options.push(
+      `<option value="${escapeAttribute(student.id)}" ${
+        student.id === selectedId ? "selected" : ""
+      }>${escapeAttribute(student.name)}</option>`,
+    );
+  });
+  return options.join("");
+}
+
+function renderRules() {
+  state.rules = Array.isArray(state.rules) ? state.rules : [];
+  els.ruleList.innerHTML = "";
+
+  if (state.rules.length === 0) {
+    els.ruleList.innerHTML = '<p class="empty-rules">No rules for this class yet.</p>';
+    return;
+  }
+
+  state.rules.forEach((rule, index) => {
+    const card = document.createElement("div");
+    card.className = "rule-card";
+    card.innerHTML = `
+      <label class="rule-toggle">
+        <input class="rule-enabled" type="checkbox" ${rule.enabled !== false ? "checked" : ""} />
+        <span>On</span>
+      </label>
+      <label class="rule-field">
+        <span>Keep</span>
+        <select class="rule-student-a">${studentSelectOptions(rule.studentAId)}</select>
+      </label>
+      <label class="rule-field">
+        <span>More than this many nearby desks</span>
+        <input class="rule-distance" type="number" min="1" max="20" value="${escapeAttribute(rule.distance || 3)}" />
+      </label>
+      <label class="rule-field">
+        <span>Away from</span>
+        <select class="rule-student-b">${studentSelectOptions(rule.studentBId)}</select>
+      </label>
+      <button class="rule-remove" type="button">Remove</button>
+    `;
+
+    card.querySelector(".rule-enabled").addEventListener("change", (event) => {
+      rule.enabled = event.target.checked;
+      saveState();
+    });
+    card.querySelector(".rule-student-a").addEventListener("change", (event) => {
+      rule.studentAId = event.target.value;
+      saveState();
+    });
+    card.querySelector(".rule-student-b").addEventListener("change", (event) => {
+      rule.studentBId = event.target.value;
+      saveState();
+    });
+    card.querySelector(".rule-distance").addEventListener("input", (event) => {
+      rule.distance = Math.max(1, Math.min(20, Number(event.target.value) || 3));
+      saveState();
+    });
+    card.querySelector(".rule-remove").addEventListener("click", () => {
+      state.rules.splice(index, 1);
+      saveState();
+      renderRules();
+    });
+
+    els.ruleList.appendChild(card);
+  });
+}
+
 function render() {
   els.roomName.value = state.roomName;
   els.deskCountInput.value = state.desks.length;
@@ -725,6 +802,7 @@ function render() {
   renderTeacherDesk();
   fitRoomToScreen();
   renderStudents();
+  renderRules();
   renderElements();
   renderDesks();
 }
@@ -804,6 +882,11 @@ function removeStudent(studentId) {
   state.desks.forEach((desk) => {
     if (desk.studentId === studentId) desk.studentId = null;
   });
+  state.rules = (Array.isArray(state.rules) ? state.rules : []).map((rule) => ({
+    ...rule,
+    studentAId: rule.studentAId === studentId ? "" : rule.studentAId,
+    studentBId: rule.studentBId === studentId ? "" : rule.studentBId,
+  }));
   saveState();
   render();
 }
@@ -877,23 +960,112 @@ function addDigSight() {
   render();
 }
 
+function addKeepApartRule() {
+  state.rules = Array.isArray(state.rules) ? state.rules : [];
+  state.rules.push({
+    id: createId("rule"),
+    type: "keepApart",
+    enabled: true,
+    studentAId: state.students[0]?.id || "",
+    studentBId: state.students[1]?.id || "",
+    distance: 3,
+  });
+  saveState();
+  render();
+}
+
 function removeElement(elementId) {
   state.elements = state.elements.filter((element) => element.id !== elementId);
   saveState();
   render();
 }
 
-function randomizeSeats() {
+function shuffledStudents() {
   const shuffled = [...state.students];
   for (let index = shuffled.length - 1; index > 0; index -= 1) {
     const swapIndex = Math.floor(Math.random() * (index + 1));
     [shuffled[index], shuffled[swapIndex]] = [shuffled[swapIndex], shuffled[index]];
   }
-  state.desks.forEach((desk, index) => {
-    desk.studentId = shuffled[index]?.id || null;
-  });
-  saveState();
-  render();
+  return shuffled;
+}
+
+function activeSeatingRules() {
+  return (Array.isArray(state.rules) ? state.rules : []).filter(
+    (rule) =>
+      rule.enabled !== false &&
+      rule.type === "keepApart" &&
+      rule.studentAId &&
+      rule.studentBId &&
+      rule.studentAId !== rule.studentBId,
+  );
+}
+
+function deskCenter(desk) {
+  const { width, height } = studentDeskCollisionSize(desk);
+  return {
+    x: desk.x + width / 2,
+    y: desk.y + height / 2,
+  };
+}
+
+function centerDistance(firstDesk, secondDesk) {
+  const first = deskCenter(firstDesk);
+  const second = deskCenter(secondDesk);
+  return Math.hypot(first.x - second.x, first.y - second.y);
+}
+
+function nearbyDeskRank(firstDesk, secondDesk, desks) {
+  const sorted = desks
+    .filter((desk) => desk.id !== firstDesk.id)
+    .map((desk) => ({
+      id: desk.id,
+      distance: centerDistance(firstDesk, desk),
+    }))
+    .sort((first, second) => first.distance - second.distance);
+  const index = sorted.findIndex((desk) => desk.id === secondDesk.id);
+  return index === -1 ? Infinity : index + 1;
+}
+
+function ruleIsSatisfied(rule, desks) {
+  const firstDesk = desks.find((desk) => desk.studentId === rule.studentAId);
+  const secondDesk = desks.find((desk) => desk.studentId === rule.studentBId);
+  if (!firstDesk || !secondDesk) return true;
+
+  const distanceLimit = Math.max(1, Math.min(20, Number(rule.distance) || 3));
+  return (
+    nearbyDeskRank(firstDesk, secondDesk, desks) > distanceLimit &&
+    nearbyDeskRank(secondDesk, firstDesk, desks) > distanceLimit
+  );
+}
+
+function seatingFollowsRules(desks) {
+  const rules = activeSeatingRules();
+  if (rules.length === 0) return true;
+  return rules.every((rule) => ruleIsSatisfied(rule, desks));
+}
+
+function randomizeSeats() {
+  const rules = activeSeatingRules();
+  const attemptCount = rules.length ? 4000 : 1;
+
+  for (let attempt = 0; attempt < attemptCount; attempt += 1) {
+    const shuffled = shuffledStudents();
+    const candidateDesks = state.desks.map((desk, index) => ({
+      ...desk,
+      studentId: shuffled[index]?.id || null,
+    }));
+
+    if (!seatingFollowsRules(candidateDesks)) continue;
+
+    state.desks.forEach((desk, index) => {
+      desk.studentId = candidateDesks[index].studentId;
+    });
+    saveState();
+    render();
+    return;
+  }
+
+  window.alert("I could not find a random seating chart that follows the enabled rules. Try turning off a rule or lowering the nearby-desk number.");
 }
 
 function desksForDrag(desk) {
@@ -1147,7 +1319,14 @@ document.querySelector("#matchBtn").addEventListener("click", () => {
 });
 
 document.querySelector("#sampleBtn").addEventListener("click", () => {
+  const previousNamesById = new Map(state.students.map((student) => [student.id, student.name]));
   state.students = sampleStudents.map((name) => ({ id: createId("student"), name }));
+  const nextIdsByName = new Map(state.students.map((student) => [student.name, student.id]));
+  state.rules = (Array.isArray(state.rules) ? state.rules : []).map((rule) => ({
+    ...rule,
+    studentAId: nextIdsByName.get(previousNamesById.get(rule.studentAId)) || "",
+    studentBId: nextIdsByName.get(previousNamesById.get(rule.studentBId)) || "",
+  }));
   syncDeskCount(state.students.length);
   randomizeSeats();
 });
@@ -1156,6 +1335,7 @@ document.querySelector("#printBtn").addEventListener("click", () => window.print
 
 document.querySelector("#addNileRiverBtn").addEventListener("click", addNileRiver);
 document.querySelector("#addDigSightBtn").addEventListener("click", addDigSight);
+els.addRuleBtn.addEventListener("click", addKeepApartRule);
 
 els.rotateTeacherBtn.addEventListener("click", (event) => {
   event.stopPropagation();
