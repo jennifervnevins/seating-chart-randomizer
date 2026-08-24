@@ -639,14 +639,42 @@ function escapeAttribute(value) {
 function renderClassTabs() {
   els.classTabs.innerHTML = "";
   state.classes.forEach((chart, index) => {
-    const tab = document.createElement("button");
-    tab.type = "button";
+    const tab = document.createElement("div");
     tab.className = "class-tab";
     tab.classList.toggle("active", index === state.activeClassIndex);
-    tab.textContent = chart.className || `Class ${index + 1}`;
+    tab.tabIndex = 0;
+    tab.setAttribute("role", "button");
     tab.setAttribute("aria-current", index === state.activeClassIndex ? "page" : "false");
-    tab.addEventListener("click", () => {
+    tab.setAttribute("aria-label", `Open ${chart.className || `Class ${index + 1}`}`);
+    tab.innerHTML = `
+      <input
+        class="class-tab-input"
+        type="text"
+        value="${escapeAttribute(chart.className || `Class ${index + 1}`)}"
+        aria-label="Class tab name"
+      />
+    `;
+    const input = tab.querySelector(".class-tab-input");
+    tab.addEventListener("click", (event) => {
+      if (event.target.closest(".class-tab-input")) return;
       if (index !== state.activeClassIndex) switchClass(index);
+    });
+    tab.addEventListener("keydown", (event) => {
+      if (event.target.closest(".class-tab-input")) return;
+      if (event.key !== "Enter" && event.key !== " ") return;
+      event.preventDefault();
+      if (index !== state.activeClassIndex) switchClass(index);
+    });
+    input.addEventListener("focus", () => {
+      if (index === state.activeClassIndex) return;
+      switchClass(index);
+      requestAnimationFrame(() => els.classTabs.querySelectorAll(".class-tab-input")[index]?.focus());
+    });
+    input.addEventListener("input", (event) => {
+      const nextName = event.target.value.trim() || `Class ${index + 1}`;
+      state.classes[index].className = nextName;
+      if (index === state.activeClassIndex) state.className = nextName;
+      saveState();
     });
     els.classTabs.appendChild(tab);
   });
