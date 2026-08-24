@@ -12,7 +12,7 @@ Open `index.html` in Chrome, Edge, Safari, or Firefox.
 - Use six class tabs to keep separate seating charts for different classes.
 - Paste a whole class list, one item per line.
 - Randomize only the currently selected class seating chart with one button.
-- Choose rows, pairs, groups, U-shape, or freeform arrangements.
+- Choose rows, pairs, trios, groups, U-shape, center aisle, or freeform arrangements.
 - Drag desks around by hand with the mouse pointer.
 - Edit the number directly on a desk.
 - Change the number, spacing, and size of desks.

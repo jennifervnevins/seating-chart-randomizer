@@ -1,7 +1,7 @@
 const STORAGE_KEY = "classroom-seating-randomizer-v2";
 const ROOM_WIDTH = 1500;
 const ROOM_HEIGHT = 1000;
-const ROOM_LAYOUT_VERSION = 24;
+const ROOM_LAYOUT_VERSION = 25;
 const DEFAULT_DESK_SCALE = 1.22;
 const TEACHER_DESK_BASE_WIDTH = 180;
 const TEACHER_DESK_BASE_HEIGHT = 91;
@@ -9,6 +9,8 @@ const ROOM_EDGE_PADDING = 10;
 const TEACHER_EDGE_PADDING = 80;
 const DESK_COLLISION_GAP = 8;
 const CLASS_COUNT = 6;
+const DEFAULT_LAYOUT = "trios";
+const DEFAULT_DESK_COUNT = 21;
 
 const sampleStudents = Array.from({ length: 20 }, (_, index) => String(index + 1));
 const chartFields = [
@@ -36,8 +38,8 @@ const state = {
   students: [],
   desks: [],
   elements: [],
-  layout: "rows",
-  deskCount: 20,
+  layout: DEFAULT_LAYOUT,
+  deskCount: DEFAULT_DESK_COUNT,
   spacing: 24,
   deskScale: DEFAULT_DESK_SCALE,
   groupMoveLocked: false,
@@ -86,15 +88,51 @@ function cloneData(value) {
   return JSON.parse(JSON.stringify(value));
 }
 
+function deskDimensionsForScale(scale) {
+  return {
+    width: Math.round(122 * scale),
+    height: Math.round(77 * scale),
+  };
+}
+
+function placeTrioLayout(desks, scale) {
+  const { width } = deskDimensionsForScale(scale);
+  const groupPositions = [
+    [95, 190],
+    [795, 180],
+    [115, 380],
+    [800, 375],
+    [125, 585],
+    [802, 575],
+    [455, 835],
+  ];
+  const trioOffsets = [
+    [0, 0],
+    [width, 0],
+    [width * 2, 0],
+  ];
+
+  desks.forEach((desk, index) => {
+    const trioIndex = Math.floor(index / 3);
+    const position = index % 3;
+    const [baseX, baseY] = groupPositions[trioIndex % groupPositions.length];
+    const [offsetX, offsetY] = trioOffsets[position];
+    desk.rotation = 0;
+    desk.groupId = `trio-${trioIndex}`;
+    desk.x = baseX + offsetX;
+    desk.y = baseY + offsetY;
+  });
+}
+
 function createDefaultChart(index) {
   const chart = {
     className: `Class ${index + 1}`,
     roomName: "Mrs. Nevins' Classroom",
     students: sampleStudents.map((name) => ({ id: createId("student"), name })),
-    desks: buildDesks(20),
+    desks: buildDesks(DEFAULT_DESK_COUNT),
     elements: [],
-    layout: "rows",
-    deskCount: 20,
+    layout: DEFAULT_LAYOUT,
+    deskCount: DEFAULT_DESK_COUNT,
     spacing: 24,
     deskScale: DEFAULT_DESK_SCALE,
     groupMoveLocked: false,
@@ -103,6 +141,7 @@ function createDefaultChart(index) {
     roomLayoutVersion: ROOM_LAYOUT_VERSION,
     teacherDesk: { x: 1334, y: 770, rotation: 90 },
   };
+  placeTrioLayout(chart.desks, chart.deskScale);
   return chart;
 }
 
@@ -114,11 +153,28 @@ function chartSnapshot() {
 }
 
 function normalizeChart(chart, index) {
-  return {
+  const normalized = {
     ...createDefaultChart(index),
     ...chart,
     className: chart?.className || `Class ${index + 1}`,
   };
+  const shouldUseDefaultTrios =
+    !chart || (Number(chart.roomLayoutVersion) < ROOM_LAYOUT_VERSION && chart.layout !== "freeform");
+
+  if (shouldUseDefaultTrios) {
+    const previousDesks = Array.isArray(chart?.desks) ? chart.desks : [];
+    normalized.layout = DEFAULT_LAYOUT;
+    normalized.deskCount = DEFAULT_DESK_COUNT;
+    normalized.desks = buildDesks(DEFAULT_DESK_COUNT);
+    normalized.desks.forEach((desk, deskIndex) => {
+      desk.studentId = previousDesks[deskIndex]?.studentId || null;
+      desk.label = previousDesks[deskIndex]?.label || `Seat ${deskIndex + 1}`;
+    });
+    placeTrioLayout(normalized.desks, Number(normalized.deskScale) || DEFAULT_DESK_SCALE);
+  }
+
+  normalized.roomLayoutVersion = ROOM_LAYOUT_VERSION;
+  return normalized;
 }
 
 function loadChart(index) {
@@ -255,10 +311,7 @@ function syncDeskCount(count) {
 
 function deskDimensions() {
   const scale = Number(state.deskScale) || DEFAULT_DESK_SCALE;
-  return {
-    width: Math.round(122 * scale),
-    height: Math.round(77 * scale),
-  };
+  return deskDimensionsForScale(scale);
 }
 
 function normalizeRotation(rotation) {
@@ -406,32 +459,7 @@ function applyLayout() {
   }
 
   if (state.layout === "trios") {
-    const deskGap = 0;
-    const groupPositions = [
-      [95, 190],
-      [795, 180],
-      [115, 380],
-      [800, 375],
-      [125, 585],
-      [802, 575],
-      [455, 835],
-    ];
-    const trioOffsets = [
-      [0, 0],
-      [width + deskGap, 0],
-      [(width + deskGap) * 2, 0],
-    ];
-
-    state.desks.forEach((desk, index) => {
-      const trioIndex = Math.floor(index / 3);
-      const position = index % 3;
-      const [baseX, baseY] = groupPositions[trioIndex % groupPositions.length];
-      const [offsetX, offsetY] = trioOffsets[position];
-      desk.rotation = 0;
-      desk.groupId = `trio-${trioIndex}`;
-      desk.x = baseX + offsetX;
-      desk.y = baseY + offsetY;
-    });
+    placeTrioLayout(state.desks, state.deskScale);
   }
 
   if (state.layout === "groups") {
